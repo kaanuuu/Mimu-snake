@@ -864,6 +864,9 @@ function showGameOver(isNew, won){
     buzz([20,40,20,40,60]);
     if (settings.effects) burstConfetti();
   }
+ if (window.submitMimuScore && G && G.score > 0) {
+    window.submitMimuScore(G.score);
+ }
 }
 function pauseGame(){
   if (G.state !== 'playing') return;
@@ -1481,6 +1484,70 @@ buildIntro();
 layoutBoard();
 startLoop();
 })();
+
+   /*<!-- Mimu Snake Auto-Leaderboard Sync -->*/
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const app = initializeApp({
+    projectId: "flawless-benefit-jlxdt",
+    apiKey: "AIzaSyBfhL6jIkzjPlNwW70AcPlasHJXZMOlMY8",
+    appId: "1:738838650216:web:80fa1321a9974ac5024add"
+  }, "mimuSnakeClient");
+
+  const db = getFirestore(app, "ai-studio-mimutelegramsoci-6487ecf5-3450-4af0-9923-cf751470bbe2");
+
+  let lastSentScore = -1;
+
+  window.submitMimuScore = async function(score) {
+    if (!score || score <= 0 || score === lastSentScore) return;
+    lastSentScore = score;
+
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('user_id');
+    const chatId = params.get('chat_id');
+    const name = params.get('name') || params.get('username') || 'Player';
+    const username = params.get('username') || '';
+
+    if (!userId || !chatId) {
+      console.warn("Mimu: user_id or chat_id not found in URL");
+      return;
+    }
+
+    const docId = `${chatId}_${userId}_snake`;
+    const docRef = doc(db, 'snake_scores', docId);
+
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        await updateDoc(docRef, {
+          total_score: (data.total_score || 0) + score,
+          games_played: (data.games_played || 0) + 1,
+          last_score: score,
+          display_name: name,
+          username: username,
+          updated_at: Date.now()
+        });
+      } else {
+        await setDoc(docRef, {
+          chat_id: String(chatId),
+          telegram_user_id: String(userId),
+          game: 'snake',
+          display_name: name,
+          username: username,
+          total_score: score,
+          games_played: 1,
+          last_score: score,
+          updated_at: Date.now()
+        });
+      }
+      console.log("✅ Mimu score added:", score);
+    } catch (e) {
+      console.error("❌ Mimu score save error:", e);
+    }
+  };
 </script>
 </body>
 </html>
